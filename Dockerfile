@@ -34,9 +34,12 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
 WORKDIR /app
 
 # Copy built application
+# Copy built application
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
+# Copy the minimal example extra_hosts.conf to /app/data
+COPY extra_hosts.conf /app/data/extra_hosts.conf
 
 # Create necessary files with correct permissions
 RUN touch /app/data/dnsmasq.pid /app/logs/dnsmasq.log /app/data/urls.json && \
