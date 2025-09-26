@@ -51,8 +51,8 @@ ENV DNSMASQ_HOSTS=/app/data/extra_hosts.conf \
 # Switch to non-root user
 USER appuser
 
-# Expose port
-EXPOSE 3000
+# Expose ports
+EXPOSE 3000 53/tcp 53/udp
 
 # Create startup script
 COPY --chown=appuser:appgroup docker-entrypoint.sh /app/
