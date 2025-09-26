@@ -10,8 +10,11 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci
 
+
 # Copy source code
 COPY . .
+# Copy static resources to dist for production
+RUN mkdir -p dist/public && cp -r src/public/* dist/public/
 
 # Build the application
 RUN npm run build

@@ -7,7 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
   // Serve static files
-  app.useStaticAssets(join(__dirname, '..', 'src', 'public'), {
+  app.useStaticAssets(join(__dirname, 'public'), {
     index: 'index.html',
   });
   
