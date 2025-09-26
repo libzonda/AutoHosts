@@ -1,28 +1,49 @@
-# DNSMasq Manager
+# AutoHosts
 
-A NestJS-based web application for managing DNSMasq service and hosts from URLs.
+A powerful NestJS-based web application for automatic DNS hosts management. AutoHosts helps you maintain and update DNS entries automatically by fetching hosts files from multiple sources and managing them through DNSMasq, all with an intuitive web interface.
 
-## Features
+## 🌟 Features
 
-- **DNSMasq Service Management**: Start, stop, restart DNSMasq with PID tracking
-- **URL-based Hosts Management**: Add, edit, delete URLs that provide hosts files
-- **Automatic Hosts Fetching**: Scheduled HTTP requests to fetch hosts from configured URLs
-- **Real-time Preview**: View the generated hosts file content and statistics
-- **Modern Web Interface**: Clean, responsive UI built with vanilla HTML/CSS/JS
+- **DNSMasq Service Management**: 
+  - Start, stop, restart DNSMasq with PID tracking
+  - Real-time service status monitoring
+  - Graceful shutdown handling
+  
+- **URL-based Hosts Management**: 
+  - Add, edit, delete URLs that provide hosts files
+  - Automatic validation of hosts file formats
+  - Bulk import/export of URL configurations
+  
+- **Automatic Hosts Fetching**: 
+  - Scheduled HTTP requests to fetch hosts from configured URLs
+  - Configurable update intervals
+  - Retry mechanism with exponential backoff
+  
+- **Real-time Preview**: 
+  - Live view of the generated hosts file content
+  - Detailed statistics and metrics
+  - Syntax highlighting for hosts entries
+  
+- **Modern Web Interface**: 
+  - Clean, responsive UI built with vanilla HTML/CSS/JS
+  - Dark/Light theme support
+  - Mobile-friendly design
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Using Docker (Recommended)
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd dnsmasq-manager
+git clone https://github.com/libzonda/AutoHosts.git
+cd AutoHosts
 ```
 
-2. Create data directory:
+2. Configure your settings (optional):
 ```bash
-mkdir -p data logs
+# Edit config.json and urls.json to customize your setup
+cp config.example.json config.json
+cp urls.example.json urls.json
 ```
 
 3. Start with Docker Compose:
@@ -30,39 +51,94 @@ mkdir -p data logs
 docker-compose up -d
 ```
 
-4. Access the web interface at: http://localhost:3000
+4. Access the web interface:
+```
+http://localhost:3000
+```
+
+The Docker container runs with non-root privileges and includes health checks to ensure service reliability.
+
+💡 **Tip**: You can use environment variables or mount a custom config file to override default settings.
 
 ### Manual Installation
 
-1. Install dependencies:
+1. Prerequisites:
+   - Node.js 20 or later
+   - DNSMasq installed on your system
+   - Git (for cloning the repository)
+
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Build the application:
+3. Build the application:
 ```bash
 npm run build
 ```
 
-3. Start the application:
+4. Start the application:
 ```bash
 npm run start:prod
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 ### Environment Variables
 
-- `DNSMASQ_HOSTS`: Path to the hosts file (default: `./extra_hosts.conf`)
-- `NODE_ENV`: Environment mode (development/production)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DNSMASQ_HOSTS` | Path to the hosts file | `./extra_hosts.conf` |
+| `NODE_ENV` | Environment mode | `production` |
+| `PORT` | Application port | `3000` |
+| `UPDATE_INTERVAL` | Hosts update interval (minutes) | `60` |
 
 ### DNSMasq Configuration
 
-The application uses `dnsmasq --no-daemon` to start the service. Make sure dnsmasq is installed on your system:
+The application uses `dnsmasq --no-daemon` to start the service. Install DNSMasq based on your system:
 
-- **Alpine Linux**: `apk add dnsmasq`
-- **Ubuntu/Debian**: `apt-get install dnsmasq`
-- **CentOS/RHEL**: `yum install dnsmasq`
+| OS | Command |
+|----|---------|
+| Alpine Linux | `apk add dnsmasq` |
+| Ubuntu/Debian | `apt-get install dnsmasq` |
+| CentOS/RHEL | `yum install dnsmasq` |
+| macOS | `brew install dnsmasq` |
+
+### Security Considerations
+
+- The Docker container runs as a non-root user
+- All file operations are restricted to the `/app` directory
+- Regular security updates are applied to the base image
+- HTTPS support for secure web interface access
+- Input validation for all URL sources
+
+## 📦 Project Structure
+
+```
+.
+├── src/                  # Source code
+│   ├── config/          # Configuration management
+│   ├── dnsmasq/         # DNSMasq service management
+│   ├── hosts/           # Hosts file management
+│   ├── url/            # URL management
+│   └── public/         # Static web files
+├── config.json         # Main configuration file
+├── urls.json          # URL sources configuration
+├── docker-compose.yml # Docker compose configuration
+└── Dockerfile         # Docker build configuration
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Usage
 

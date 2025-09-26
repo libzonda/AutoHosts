@@ -16,13 +16,38 @@ export class UrlService {
   private readonly logger = new Logger(UrlService.name);
   private readonly urlsFile = path.join(process.cwd(), 'urls.json');
 
+  private async initializeUrlsFile(): Promise<void> {
+    try {
+      // Create an empty array if file doesn't exist
+      if (!(await fs.pathExists(this.urlsFile))) {
+        this.logger.log('URLs file not found, creating empty file');
+        await fs.writeJson(this.urlsFile, [], { spaces: 2 });
+      } else {
+        // Validate file content
+        const content = await fs.readFile(this.urlsFile, 'utf8');
+        try {
+          const data = JSON.parse(content);
+          if (!Array.isArray(data)) {
+            this.logger.warn('Invalid URLs file format, resetting to empty array');
+            await fs.writeJson(this.urlsFile, [], { spaces: 2 });
+          }
+        } catch (parseError) {
+          this.logger.error('URLs file contains invalid JSON, resetting to empty array');
+          await fs.writeJson(this.urlsFile, [], { spaces: 2 });
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error initializing URLs file:', error);
+      throw new Error('Failed to initialize URLs file');
+    }
+  }
+
   async getAllUrls(): Promise<UrlEntry[]> {
     try {
-      if (await fs.pathExists(this.urlsFile)) {
-        const data = await fs.readFile(this.urlsFile, 'utf8');
-        return JSON.parse(data);
-      }
-      return [];
+      await this.initializeUrlsFile();
+      const data = await fs.readFile(this.urlsFile, 'utf8');
+      const urls = JSON.parse(data);
+      return Array.isArray(urls) ? urls : [];
     } catch (error) {
       this.logger.error('Error reading URLs file:', error);
       return [];
@@ -129,7 +154,15 @@ export class UrlService {
   }
 
   private async saveUrls(urls: UrlEntry[]): Promise<void> {
-    await fs.writeFile(this.urlsFile, JSON.stringify(urls, null, 2));
+    try {
+      // Ensure urls is always an array
+      const safeUrls = Array.isArray(urls) ? urls : [];
+      // Use writeJson for better error handling and consistent formatting
+      await fs.writeJson(this.urlsFile, safeUrls, { spaces: 2 });
+    } catch (error) {
+      this.logger.error('Error saving URLs file:', error);
+      throw new Error('Failed to save URLs file');
+    }
   }
 
   private generateId(): string {

@@ -1,0 +1,9 @@
+[
+  {
+    "id": "example1",
+    "url": "https://example.com/hosts",
+    "name": "Example Hosts",
+    "enabled": false,
+    "lastFetch": null
+  }
+]

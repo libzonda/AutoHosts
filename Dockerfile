@@ -1,22 +1,14 @@
-# Use Alpine Linux as base image
-FROM alpine:edge
+# Build stage
+FROM node:20-alpine AS builder
 
-# Install Node.js, npm, and dnsmasq
-RUN apk add --no-cache \
-    nodejs \
-    npm \
-    dnsmasq \
-    curl \
-    bash
-
-# Create app directory
+# Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -24,50 +16,51 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Create necessary directories and files
-RUN mkdir -p /app/data && \
-    touch /app/dnsmasq.pid /app/dnsmasq.log /app/urls.json
+# Production stage
+FROM node:20-alpine
+
+# Install dnsmasq and other required packages
+RUN apk add --no-cache dnsmasq curl bash
+
+# Create app directory and non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    mkdir -p /app/data /app/logs && \
+    chown -R appuser:appgroup /app
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+
+# Create necessary files with correct permissions
+RUN touch /app/data/dnsmasq.pid /app/logs/dnsmasq.log /app/data/urls.json && \
+    chown -R appuser:appgroup /app/data /app/logs
+
+# Add metadata labels
+LABEL maintainer="libzonda" \
+      version="1.0" \
+      description="DNSMasq Manager - A NestJS-based web application for managing DNSMasq service and hosts"
 
 # Set environment variables
-ENV DNSMASQ_HOSTS=/app/data/extra_hosts.conf
-ENV NODE_ENV=production
+ENV DNSMASQ_HOSTS=/app/data/extra_hosts.conf \
+    NODE_ENV=production
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 3000
 
 # Create startup script
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Start the NestJS application\n\
-node dist/main.js &\n\
-APP_PID=$!\n\
-\n\
-# Function to cleanup on exit\n\
-cleanup() {\n\
-    echo "Shutting down..."\n\
-    kill $APP_PID 2>/dev/null || true\n\
-    if [ -f /app/dnsmasq.pid ]; then\n\
-        DNSMASQ_PID=$(cat /app/dnsmasq.pid)\n\
-        kill $DNSMASQ_PID 2>/dev/null || true\n\
-        rm -f /app/dnsmasq.pid\n\
-    fi\n\
-    exit 0\n\
-}\n\
-\n\
-# Set up signal handlers\n\
-trap cleanup SIGTERM SIGINT\n\
-\n\
-# Wait for the application to start\n\
-sleep 5\n\
-\n\
-# Keep the container running\n\
-wait $APP_PID\n\
-' > /app/start.sh && chmod +x /app/start.sh
+COPY --chown=appuser:appgroup docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3000/api/dnsmasq/status || exit 1
 
 # Start the application
-CMD ["/app/start.sh"]
+CMD ["/app/docker-entrypoint.sh"]

@@ -53,8 +53,9 @@ export class DnsmasqService {
         return { success: false, message: 'DNSMasq is already running' };
       }
 
-      // Start dnsmasq process
-      const child = spawn('dnsmasq', ['--no-daemon'], {
+      // Start dnsmasq process with additional hosts file
+      const hostsFile = process.env.DNSMASQ_HOSTS || '/app/data/extra_hosts.conf';
+      const child = spawn('dnsmasq', ['--no-daemon', `--addn-hosts=${hostsFile}`], {
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe']
       });
