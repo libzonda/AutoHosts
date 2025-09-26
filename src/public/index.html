@@ -349,6 +349,11 @@
                 </div>
                 <button class="btn" onclick="addUrl()">Add URL</button>
                 <button class="btn btn-success" onclick="fetchHostsNow()">Fetch Hosts Now</button>
+                <span style="margin-left:10px;">
+                  <input type="number" id="timeout-input" class="form-control" style="width:120px;display:inline-block;" min="1000" step="1000" placeholder="Timeout (ms)" value="15000">
+                  <span style="margin-left:2px;">ms</span>
+                  <button class="btn" onclick="saveTimeout()" style="margin-left:8px;">Save Timeout</button>
+                </span>
                 
                 <div id="url-list" class="url-list" style="margin-top: 20px;">
                     <div class="loading"></div> Loading URLs...
@@ -577,11 +582,19 @@
 
         async function fetchHostsNow() {
             try {
-                const response = await fetch('/api/hosts/fetch', { method: 'POST' });
+                const timeoutInput = document.getElementById('timeout-input');
+                let timeout = parseInt(timeoutInput?.value || '');
+                if (isNaN(timeout) || timeout < 1000) timeout = undefined;
+                const response = await fetch('/api/hosts/fetch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(timeout ? { timeout } : {})
+                });
                 const result = await response.json();
                 showAlert(result.message, result.success ? 'success' : 'danger');
-                
                 if (result.success) {
+                    // fetch成功后清空所有lastError
+                    await clearAllUrlErrors();
                     setTimeout(() => {
                         loadHostsContent();
                         loadHostsStats();
@@ -593,45 +606,40 @@
             }
         }
 
-        // Hosts Preview Functions
-        async function loadHostsContent() {
+        async function clearAllUrlErrors() {
             try {
-                const response = await fetch('/api/hosts/content');
+                const response = await fetch('/api/urls');
+                const urls = await response.json();
+                for (const url of urls) {
+                    if (url.lastError) {
+                        await fetch(`/api/urls/${url.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lastError: null })
+                        });
+                    }
+                }
+            } catch {}
+        }
+
+        async function saveTimeout() {
+            const timeoutInput = document.getElementById('timeout-input');
+            let timeout = parseInt(timeoutInput?.value || '');
+            if (isNaN(timeout) || timeout < 1000) {
+                showAlert('Timeout must be a positive number (>=1000 ms)', 'danger');
+                return;
+            }
+            try {
+                const response = await fetch('/api/hosts/timeout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timeout })
+                });
                 const result = await response.json();
-                document.getElementById('hosts-content').textContent = result.content;
+                showAlert(result.message, result.success ? 'success' : 'danger');
             } catch (error) {
-                document.getElementById('hosts-content').textContent = 'Error loading hosts content: ' + error.message;
+                showAlert('Error saving timeout: ' + error.message, 'danger');
             }
-        }
-
-        async function loadHostsStats() {
-            try {
-                const response = await fetch('/api/hosts/stats');
-                const stats = await response.json();
-                
-                const statsDiv = document.getElementById('hosts-stats');
-                statsDiv.innerHTML = `
-                    <div class="status-card">
-                        <h4>Hosts File Statistics</h4>
-                        <div class="status-info">
-                            <div class="status-item"><strong>File:</strong> ${stats.filePath}</div>
-                            <div class="status-item"><strong>Exists:</strong> ${stats.exists ? 'Yes' : 'No'}</div>
-                            ${stats.exists ? `
-                                <div class="status-item"><strong>Size:</strong> ${(stats.size / 1024).toFixed(2)} KB</div>
-                                <div class="status-item"><strong>Entries:</strong> ${stats.lineCount}</div>
-                                <div class="status-item"><strong>Modified:</strong> ${new Date(stats.lastModified).toLocaleString()}</div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('hosts-stats').innerHTML = '<div class="alert alert-danger">Error loading stats: ' + error.message + '</div>';
-            }
-        }
-
-        function refreshHostsContent() {
-            loadHostsContent();
-            loadHostsStats();
         }
 
         async function loadConfigInputs() {
@@ -645,6 +653,14 @@
                 const data2 = await res2.json();
                 document.getElementById('hosts-path-input').value = data2.path || '';
             } catch (e) {}
+            // 加载timeout配置
+            try {
+                const response = await fetch('/api/hosts/timeout');
+                const data = await response.json();
+                if (data && data.timeout) {
+                    document.getElementById('timeout-input').value = data.timeout;
+                }
+            } catch {}
         }
 
         async function saveCron() {
@@ -685,6 +701,36 @@
                 }
             } catch (e) {
                 showAlert('Failed to save hosts path: ' + e.message, 'danger');
+            }
+        }
+
+        async function loadHostsContent() {
+            try {
+                const response = await fetch('/api/hosts/content');
+                const data = await response.json();
+                document.getElementById('hosts-content').textContent = data.content || '# No hosts file found';
+            } catch (e) {
+                document.getElementById('hosts-content').textContent = '# Error loading hosts file';
+            }
+        }
+
+        async function loadHostsStats() {
+            try {
+                const response = await fetch('/api/hosts/stats');
+                const stats = await response.json();
+                const statsDiv = document.getElementById('hosts-stats');
+                if (!stats.exists) {
+                    statsDiv.innerHTML = '<span style="color:#dc3545;">Hosts file not found</span>';
+                    return;
+                }
+                statsDiv.innerHTML = `
+                    <div><strong>File:</strong> ${stats.filePath}</div>
+                    <div><strong>Size:</strong> ${stats.size} bytes</div>
+                    <div><strong>Last Modified:</strong> ${stats.lastModified ? new Date(stats.lastModified).toLocaleString() : '-'}</div>
+                    <div><strong>Host Lines:</strong> ${stats.lineCount}</div>
+                `;
+            } catch (e) {
+                document.getElementById('hosts-stats').innerHTML = '<span style="color:#dc3545;">Error loading stats</span>';
             }
         }
 
