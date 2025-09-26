@@ -23,7 +23,7 @@ dnsmasq.log
 # Runtime files
 dnsmasq.pid
 urls.json
-extra_hosts.conf
+
 
 # IDE files
 .vscode/
