@@ -124,9 +124,12 @@ src/
 
 ## 🐳 Docker Tags
 
-- `latest` - Latest stable release
-- `edge` - Latest development build
-- `X.Y.Z` - Specific version release
+- `latest` - Latest stable release from main branch
+- `v1.2.3` - Release version (full semver)
+- `1.2` - Release version (major.minor)
+- `main` - Latest build from main branch
+- `pr-123` - Pull request build
+- `sha-abc123` - Specific commit
 
 Available on both:
 - Docker Hub: `docker pull libzonda/autohosts:latest`
