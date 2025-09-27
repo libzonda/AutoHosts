@@ -21,8 +21,8 @@ export class HostsController {
   }
 
   @Post('fetch')
-  async fetchHostsNow() {
-    return this.hostsService.fetchHostsNow();
+  async fetchHostsNow(@Body() body?: { timeout?: number }) {
+    return this.hostsService.fetchHostsNow(body?.timeout);
   }
 
   @Get('schedule')
@@ -69,6 +69,26 @@ export class HostsController {
       return { success: true, message: 'Hosts path updated', path: p };
     } catch (e: any) {
       return { success: false, message: e?.message || 'Failed to update hosts path' };
+    }
+  }
+
+  @Get('timeout')
+  async getTimeout(): Promise<{ timeout: number }> {
+    const timeout = await this.configService.getHostsFetchTimeout();
+    return { timeout };
+  }
+
+  @Post('timeout')
+  async setTimeout(@Body() body: { timeout: number }): Promise<{ success: boolean; message: string; timeout?: number }> {
+    const t = Number(body?.timeout);
+    if (!t || t < 1000) {
+      return { success: false, message: 'Timeout must be a positive number (>=1000 ms)' };
+    }
+    try {
+      await this.configService.setHostsFetchTimeout(t);
+      return { success: true, message: 'Timeout updated', timeout: t };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Failed to update timeout' };
     }
   }
 }

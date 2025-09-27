@@ -5,6 +5,7 @@ import * as path from 'path';
 export interface AppConfigShape {
   hostsFetchCron: string;
   hostsFilePath: string;
+  hostsFetchTimeout: number;
 }
 
 @Injectable()
@@ -14,7 +15,18 @@ export class ConfigService {
   private readonly defaultConfig: AppConfigShape = {
     hostsFetchCron: '*/5 * * * *',
     hostsFilePath: process.env.DNSMASQ_HOSTS || path.join(process.cwd(), 'extra_hosts.conf'),
+    hostsFetchTimeout: 10000,
   };
+  async getHostsFetchTimeout(): Promise<number> {
+    const cfg = await this.getConfig();
+    return typeof cfg.hostsFetchTimeout === 'number' ? cfg.hostsFetchTimeout : this.defaultConfig.hostsFetchTimeout;
+  }
+
+  async setHostsFetchTimeout(timeout: number): Promise<void> {
+    const current = await this.getConfig();
+    current.hostsFetchTimeout = timeout > 0 ? timeout : this.defaultConfig.hostsFetchTimeout;
+    await this.saveConfig(current);
+  }
 
   async getConfig(): Promise<AppConfigShape> {
     try {

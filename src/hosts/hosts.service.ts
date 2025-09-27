@@ -32,26 +32,32 @@ export class HostsService implements OnModuleInit {
     this.hostsFile = pathStr;
   }
 
-  async fetchHostsFromUrls() {
+  async fetchHostsFromUrls(timeoutOverride?: number, returnStats = false): Promise<{hostsCount: number, errorsCount: number}|void> {
     this.logger.log('Starting scheduled hosts fetch...');
-    
     try {
       const urls = await this.urlService.getEnabledUrls();
       if (urls.length === 0) {
         this.logger.log('No enabled URLs to fetch');
-        return;
+        return returnStats ? { hostsCount: 0, errorsCount: 0 } : undefined;
       }
 
       let allHosts: string[] = [];
       const errors: string[] = [];
 
+      // 获取全局 timeout 配置
+      let timeout = timeoutOverride;
+      if (!timeout) {
+        timeout = await this.configService.getHostsFetchTimeout();
+      }
+      if (!timeout || timeout < 1000) timeout = 10000;
+
       for (const urlEntry of urls) {
         try {
           this.logger.log(`Fetching hosts from: ${urlEntry.url}`);
-          
+
           const response = await firstValueFrom(
             this.httpService.get(urlEntry.url, {
-              timeout: 10000,
+              timeout,
               headers: {
                 'User-Agent': 'DNSMasq-Manager/1.0'
               }
@@ -60,7 +66,7 @@ export class HostsService implements OnModuleInit {
 
           const hosts = this.parseHostsContent(response.data as string);
           allHosts = allHosts.concat(hosts);
-          
+
           // Update last fetch time
           await this.urlService.updateUrl(urlEntry.id, {
             lastFetch: new Date(),
@@ -69,13 +75,24 @@ export class HostsService implements OnModuleInit {
 
           this.logger.log(`Fetched ${hosts.length} hosts from ${urlEntry.url}`);
         } catch (error) {
-          const errorMsg = `Failed to fetch from ${urlEntry.url}: ${error.message}`;
+          // 提取详细错误信息
+          let details = error?.message || String(error);
+          if (error?.response) {
+            details += ` | status: ${error.response.status}`;
+            if (error.response.data) {
+              details += ` | data: ${JSON.stringify(error.response.data)}`;
+            }
+          }
+          if (error?.stack) {
+            details += `\nStack: ${error.stack}`;
+          }
+          const errorMsg = `Failed to fetch from ${urlEntry.url}: ${details}`;
           this.logger.error(errorMsg);
           errors.push(errorMsg);
-          
+
           // Update error status
           await this.urlService.updateUrl(urlEntry.id, {
-            lastError: error.message
+            lastError: details
           });
         }
       }
@@ -89,8 +106,14 @@ export class HostsService implements OnModuleInit {
       if (errors.length > 0) {
         this.logger.warn(`Completed with ${errors.length} errors`);
       }
+      if (returnStats) {
+        return { hostsCount: allHosts.length, errorsCount: errors.length };
+      }
     } catch (error) {
       this.logger.error('Error in scheduled hosts fetch:', error);
+      if (returnStats) {
+        return { hostsCount: 0, errorsCount: 0 };
+      }
     }
   }
 
@@ -115,65 +138,20 @@ export class HostsService implements OnModuleInit {
     this.logger.log(`Registered cron job '${this.jobName}' with schedule: ${cronExp}`);
   }
 
-  async fetchHostsNow(): Promise<{ success: boolean; message: string; hostsCount?: number }> {
+  async fetchHostsNow(timeoutOverride?: number): Promise<{ success: boolean; message: string; hostsCount?: number }> {
     try {
       this.logger.log('Manual hosts fetch triggered...');
-      
-      const urls = await this.urlService.getEnabledUrls();
-      if (urls.length === 0) {
-        return { success: false, message: 'No enabled URLs to fetch' };
+      const result = await this.fetchHostsFromUrls(timeoutOverride, true) as { hostsCount: number, errorsCount: number } | void;
+      if (!result) {
+        return { success: true, message: 'No enabled URLs to fetch', hostsCount: 0 };
       }
-
-      let allHosts: string[] = [];
-      const errors: string[] = [];
-
-      for (const urlEntry of urls) {
-        try {
-          this.logger.log(`Fetching hosts from: ${urlEntry.url}`);
-          
-          const response = await firstValueFrom(
-            this.httpService.get(urlEntry.url, {
-              timeout: 10000,
-              headers: {
-                'User-Agent': 'DNSMasq-Manager/1.0'
-              }
-            })
-          );
-
-          const hosts = this.parseHostsContent(response.data as string);
-          allHosts = allHosts.concat(hosts);
-          
-          // Update last fetch time
-          await this.urlService.updateUrl(urlEntry.id, {
-            lastFetch: new Date(),
-            lastError: undefined
-          });
-        } catch (error) {
-          const errorMsg = `Failed to fetch from ${urlEntry.url}: ${error.message}`;
-          this.logger.error(errorMsg);
-          errors.push(errorMsg);
-          
-          // Update error status
-          await this.urlService.updateUrl(urlEntry.id, {
-            lastError: error.message
-          });
-        }
-      }
-
-      // Write all hosts to file
-      if (allHosts.length > 0) {
-        await this.writeHostsFile(allHosts);
-        this.logger.log(`Successfully wrote ${allHosts.length} hosts to ${this.hostsFile}`);
-      }
-
-      const message = errors.length > 0 
-        ? `Fetched ${allHosts.length} hosts with ${errors.length} errors`
-        : `Successfully fetched ${allHosts.length} hosts`;
-
-      return { 
-        success: true, 
+      const message = result.errorsCount > 0
+        ? `Fetched ${result.hostsCount} hosts with ${result.errorsCount} errors`
+        : `Successfully fetched ${result.hostsCount} hosts`;
+      return {
+        success: true,
         message,
-        hostsCount: allHosts.length
+        hostsCount: result.hostsCount
       };
     } catch (error) {
       this.logger.error('Error in manual hosts fetch:', error);
