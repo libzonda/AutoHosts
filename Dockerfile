@@ -39,7 +39,10 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 # Copy the minimal example extra_hosts.conf to /app/data
-COPY extra_hosts.conf /app/data/extra_hosts.conf
+COPY extra_hosts.conf.example /app/data/extra_hosts.conf
+# Copy the minimal example urls.json to /app/data
+COPY urls.example.json /app/data/urls.json
+
 
 # Create necessary files with correct permissions
 RUN touch /app/data/dnsmasq.pid /app/logs/dnsmasq.log /app/data/urls.json && \
