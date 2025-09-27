@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  dnsmasq-manager:
+  autohosts:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dnsmasq-manager
+  container_name: autohosts
     ports:
       - "3000:3000"
       - "53:53/tcp"
