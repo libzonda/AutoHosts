@@ -2,44 +2,54 @@ import { Injectable, Logger } from '@nestjs/common';
 import { spawn, exec } from 'child_process';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export interface DnsmasqStatus {
   isRunning: boolean;
   pid?: number;
   startTime?: Date;
   command?: string;
+  port?: number;
 }
 
 @Injectable()
 export class DnsmasqService {
   private readonly logger = new Logger(DnsmasqService.name);
-  private readonly pidFile = path.join(process.cwd(), 'dnsmasq.pid');
   private readonly logFile = path.join(process.cwd(), 'dnsmasq.log');
 
   async getStatus(): Promise<DnsmasqStatus> {
     try {
-      if (await fs.pathExists(this.pidFile)) {
-        const pid = parseInt(await fs.readFile(this.pidFile, 'utf8'));
-        
-        // Check if process is actually running
-        const isRunning = await this.isProcessRunning(pid);
-        
-        if (isRunning) {
-          const stats = await fs.stat(this.pidFile);
-          return {
-            isRunning: true,
-            pid,
-            startTime: stats.birthtime,
-            command: 'dnsmasq'
-          };
-        } else {
-          // Clean up stale PID file
-          await fs.remove(this.pidFile);
-        }
+      const { stdout } = await execAsync('ps aux | grep "[d]nsmasq"');
+      if (!stdout.trim()) {
+        return { isRunning: false };
       }
-      
-      return { isRunning: false };
+
+      // Parse process info
+      const processInfo = stdout.trim().split('\n')[0].split(/\s+/);
+      const pid = parseInt(processInfo[1]);
+
+      // Get process start time
+      const { stdout: timeInfo } = await execAsync(`ps -o lstart= -p ${pid}`);
+      const startTime = new Date(timeInfo.trim());
+
+      // Check if DNS port is bound
+      const { stdout: portInfo } = await execAsync('netstat -lnp | grep dnsmasq');
+      const port = portInfo.includes(':53 ') ? 53 : undefined;
+
+      return {
+        isRunning: true,
+        pid,
+        startTime,
+        port,
+        command: 'dnsmasq'
+      };
     } catch (error) {
+      // 如果执行命令失败，可能是因为进程不存在
+      if (error.message.includes('no such process')) {
+        return { isRunning: false };
+      }
       this.logger.error('Error getting dnsmasq status:', error);
       return { isRunning: false };
     }
@@ -56,25 +66,31 @@ export class DnsmasqService {
       // Start dnsmasq process with additional hosts file
       const hostsFile = process.env.DNSMASQ_HOSTS || '/app/data/extra_hosts.conf';
       const child = spawn('dnsmasq', [`--addn-hosts=${hostsFile}`], {
-        detached: true,
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
-      // Write PID to file
-      await fs.writeFile(this.pidFile, child.pid.toString());
-      
       // Redirect output to log file
       const logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
       child.stdout.pipe(logStream);
       child.stderr.pipe(logStream);
 
-      this.logger.log(`DNSMasq started with PID: ${child.pid}`);
-      
-      return { 
-        success: true, 
-        message: 'DNSMasq started successfully',
-        pid: child.pid
-      };
+      // Wait a moment to check if process started successfully
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const newStatus = await this.getStatus();
+
+      if (newStatus.isRunning) {
+        this.logger.log(`DNSMasq started with PID: ${newStatus.pid}`);
+        return { 
+          success: true, 
+          message: 'DNSMasq started successfully',
+          pid: newStatus.pid
+        };
+      } else {
+        return { 
+          success: false, 
+          message: 'DNSMasq failed to start - process not found after launch'
+        };
+      }
     } catch (error) {
       this.logger.error('Error starting dnsmasq:', error);
       return { success: false, message: `Failed to start dnsmasq: ${error.message}` };
@@ -90,15 +106,19 @@ export class DnsmasqService {
       }
 
       // Kill the process
-      const killed = await this.killProcess(status.pid);
+      await execAsync(`kill ${status.pid}`);
       
-      if (killed) {
-        // Remove PID file
-        await fs.remove(this.pidFile);
+      // Wait a moment and check if process is really stopped
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const newStatus = await this.getStatus();
+      
+      if (!newStatus.isRunning) {
         this.logger.log(`DNSMasq stopped (PID: ${status.pid})`);
         return { success: true, message: 'DNSMasq stopped successfully' };
       } else {
-        return { success: false, message: 'Failed to stop dnsmasq process' };
+        // Try force kill if normal kill failed
+        await execAsync(`kill -9 ${status.pid}`);
+        return { success: true, message: 'DNSMasq force stopped' };
       }
     } catch (error) {
       this.logger.error('Error stopping dnsmasq:', error);
@@ -118,8 +138,7 @@ export class DnsmasqService {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Start again
-      const startResult = await this.start();
-      return startResult;
+      return await this.start();
     } catch (error) {
       this.logger.error('Error restarting dnsmasq:', error);
       return { success: false, message: `Failed to restart dnsmasq: ${error.message}` };
@@ -136,37 +155,5 @@ export class DnsmasqService {
       this.logger.error('Error reading logs:', error);
       return 'Error reading logs';
     }
-  }
-
-  private async isProcessRunning(pid: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      // Use different commands for Windows and Unix-like systems
-      const isWindows = process.platform === 'win32';
-      const command = isWindows ? `tasklist /FI "PID eq ${pid}"` : `ps -p ${pid}`;
-      
-      exec(command, (error, stdout) => {
-        if (error) {
-          resolve(false);
-        } else {
-          resolve(stdout.includes(pid.toString()));
-        }
-      });
-    });
-  }
-
-  private async killProcess(pid: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const isWindows = process.platform === 'win32';
-      const command = isWindows ? `taskkill /PID ${pid} /F` : `kill ${pid}`;
-      
-      exec(command, (error) => {
-        if (error) {
-          this.logger.error(`Failed to kill process ${pid}:`, error);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-    });
   }
 }
