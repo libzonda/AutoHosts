@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Main DNS service
   autohosts:
     build:
       context: .
@@ -26,6 +27,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 5s
+
+  # Demo service to demonstrate DNS usage
+  demo:
+    image: alpine:latest
+    container_name: autohosts-demo
+    # Use autohosts as DNS server
+    dns:
+      - autohosts # Use autohosts service as DNS
+    depends_on:
+      autohosts:
+        condition: service_healthy
+    # Keep container running for testing
+    command: sh -c "while true; do sleep 30; ping -c 1 my.custom.domain; done"
+    networks:
+      - dnsmasq-network
 
 networks:
   dnsmasq-network:
