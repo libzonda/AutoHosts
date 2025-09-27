@@ -21,16 +21,18 @@ export class DnsmasqService {
 
   async getStatus(): Promise<DnsmasqStatus> {
     try {
-      const { stdout } = await execAsync('ps aux | grep "[d]nsmasq"');
+      // 使用更基础的 ps 命令，适配 Alpine Linux
+      const { stdout } = await execAsync('ps | grep dnsmasq | grep -v grep');
       if (!stdout.trim()) {
         return { isRunning: false };
       }
 
-      // Parse process info
-      const processInfo = stdout.trim().split('\n')[0].split(/\s+/);
-      const pid = parseInt(processInfo[1]);
+      // Parse process info (PID is the first column in basic ps output)
+      const processInfo = stdout.trim().split(/\s+/);
+      const pid = parseInt(processInfo[0]);
 
       // Get process elapsed time
+
       const { stdout: timeInfo } = await execAsync(`ps -o etime= -p ${pid}`);
       const elapsedTime = timeInfo.trim();
       const now = new Date();
