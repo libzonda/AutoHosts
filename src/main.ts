@@ -6,19 +6,33 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Ensure extra_hosts.conf exists, if not, copy from example
+  // Ensure extra_hosts.conf and config.json exist, if not, copy from example
   const fs = require('fs');
   const path = require('path');
   const dataDir = path.join(__dirname, '..', 'data');
+  // extra_hosts.conf
   const hostsFile = path.join(dataDir, 'extra_hosts.conf');
-  const exampleFile = path.join(__dirname, '..', 'extra_hosts.conf.example');
+  const hostsExampleFile = path.join(__dirname, '..', 'extra_hosts.conf.example');
   if (!fs.existsSync(hostsFile)) {
-    // Ensure data dir exists
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    if (fs.existsSync(exampleFile)) {
-      fs.copyFileSync(exampleFile, hostsFile);
+    if (fs.existsSync(hostsExampleFile)) {
+      fs.copyFileSync(hostsExampleFile, hostsFile);
     } else {
       fs.writeFileSync(hostsFile, '# example: 127.0.0.1 my.custom.domain\n');
+    }
+  }
+  // config.json
+  const configFile = path.join(__dirname, '..', 'config.json');
+  const configExampleFile = path.join(__dirname, '..', 'config.json.example');
+  if (!fs.existsSync(configFile)) {
+    if (fs.existsSync(configExampleFile)) {
+      fs.copyFileSync(configExampleFile, configFile);
+    } else {
+      fs.writeFileSync(configFile, JSON.stringify({
+        hostsFetchCron: "*/5 * * * *",
+        hostsFilePath: "D:\\PRJ\\AutoHosts\\extra_hosts.conf",
+        hostsFetchTimeout: 20000
+      }, null, 2));
     }
   }
 

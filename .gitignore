@@ -1,3 +1,5 @@
+# Ignore runtime config file
+config.json
 # Ignore runtime hosts file
 extra_hosts.conf
 # Dependencies
