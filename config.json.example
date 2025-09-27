@@ -1,5 +1,5 @@
 {
   "hostsFetchCron": "*/5 * * * *",
-  "hostsFilePath": "D:\\PRJ\\AutoHosts\\extra_hosts.conf",
+  "hostsFilePath": "/app/data/extra_hosts.conf",
   "hostsFetchTimeout": 20000
 }
