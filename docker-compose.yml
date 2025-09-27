@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-  container_name: autohosts
+    container_name: autohosts
     ports:
       - "3000:3000"
       - "53:53/tcp"
