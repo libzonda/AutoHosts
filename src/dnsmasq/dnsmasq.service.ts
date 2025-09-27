@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { spawn, exec } from 'child_process';
+import { spawn } from 'child_process';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
 
 export interface DnsmasqStatus {
   isRunning: boolean;
@@ -18,45 +15,118 @@ export interface DnsmasqStatus {
 export class DnsmasqService {
   private readonly logger = new Logger(DnsmasqService.name);
   private readonly logFile = path.join(process.cwd(), 'dnsmasq.log');
+  private currentProcess: ReturnType<typeof spawn> | null = null;
 
   async getStatus(): Promise<DnsmasqStatus> {
     try {
-      // 使用更基础的 ps 命令，适配 Alpine Linux
-      const { stdout } = await execAsync('ps | grep dnsmasq | grep -v grep');
-      if (!stdout.trim()) {
-        return { isRunning: false };
+      if (this.currentProcess && this.currentProcess.pid) {
+        try {
+          // 检查进程是否存在
+          await fs.access(`/proc/${this.currentProcess.pid}`);
+          // 获取启动时间
+          const startTime = await this.getProcessStartTime(this.currentProcess.pid);
+          // 检查端口
+          const isPortBound = await this.checkPort53();
+
+          return {
+            isRunning: true,
+            pid: this.currentProcess.pid,
+            startTime: startTime || undefined,
+            port: isPortBound ? 53 : undefined,
+            command: 'dnsmasq'
+          };
+        } catch (error) {
+          // 进程不存在，清理引用
+          this.currentProcess = null;
+        }
       }
 
-      // Parse process info (PID is the first column in basic ps output)
-      const processInfo = stdout.trim().split(/\s+/);
-      const pid = parseInt(processInfo[0]);
+      // 如果没有当前进程或进程不存在，尝试在系统中查找 dnsmasq
+      const pid = await this.findDnsmasqPid();
+      if (pid) {
+        const startTime = await this.getProcessStartTime(pid);
+        const isPortBound = await this.checkPort53();
 
-      // Get process elapsed time
+        return {
+          isRunning: true,
+          pid,
+          startTime: startTime || undefined,
+          port: isPortBound ? 53 : undefined,
+          command: 'dnsmasq'
+        };
+      }
 
-      const { stdout: timeInfo } = await execAsync(`ps -o etime= -p ${pid}`);
-      const elapsedTime = timeInfo.trim();
-      const now = new Date();
-      // Calculate start time by subtracting elapsed time from now
-      const startTime = new Date(now.getTime() - this.parseElapsedTime(elapsedTime));
-
-      // Check if DNS port is bound
-      const { stdout: portInfo } = await execAsync('netstat -lnp | grep dnsmasq');
-      const port = portInfo.includes(':53 ') ? 53 : undefined;
-
-      return {
-        isRunning: true,
-        pid,
-        startTime,
-        port,
-        command: 'dnsmasq'
-      };
+      return { isRunning: false };
     } catch (error) {
-      // 如果执行命令失败，可能是因为进程不存在
-      if (error.message.includes('no such process')) {
-        return { isRunning: false };
-      }
       this.logger.error('Error getting dnsmasq status:', error);
       return { isRunning: false };
+    }
+  }
+
+  private async findDnsmasqPid(): Promise<number | null> {
+    try {
+      const procDirs = await fs.readdir('/proc');
+      
+      for (const dir of procDirs) {
+        if (/^\d+$/.test(dir)) {
+          try {
+            const cmdline = await fs.readFile(`/proc/${dir}/cmdline`, 'utf8');
+            if (cmdline.includes('dnsmasq')) {
+              return parseInt(dir);
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      this.logger.error('Error finding dnsmasq pid:', error);
+      return null;
+    }
+  }
+
+  private async getProcessStartTime(pid: number): Promise<Date | null> {
+    try {
+      const statContent = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
+      const startTime = parseInt(statContent.split(' ')[21]);
+      const btime = await this.getSystemBootTime();
+      
+      if (btime === null) {
+        return null;
+      }
+
+      const clockTicks = 100; // 标准 Linux 配置
+      const startTimeMs = (btime + startTime / clockTicks) * 1000;
+      
+      return new Date(startTimeMs);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async getSystemBootTime(): Promise<number | null> {
+    try {
+      const statContent = await fs.readFile('/proc/stat', 'utf8');
+      const btimeLine = statContent.split('\n').find(line => line.startsWith('btime'));
+      if (btimeLine) {
+        return parseInt(btimeLine.split(' ')[1]);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async checkPort53(): Promise<boolean> {
+    try {
+      const [tcp, udp] = await Promise.all([
+        fs.readFile('/proc/net/tcp', 'utf8'),
+        fs.readFile('/proc/net/udp', 'utf8')
+      ]);
+      return tcp.includes(':0035') || udp.includes(':0035');
+    } catch {
+      return false;
     }
   }
 
@@ -68,18 +138,15 @@ export class DnsmasqService {
         return { success: false, message: 'DNSMasq is already running' };
       }
 
-      // Start dnsmasq process with additional hosts file
       const hostsFile = process.env.DNSMASQ_HOSTS || '/app/data/extra_hosts.conf';
-      const child = spawn('dnsmasq', [`--addn-hosts=${hostsFile}`], {
+      this.currentProcess = spawn('dnsmasq', [`--addn-hosts=${hostsFile}`], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
-      // Redirect output to log file
       const logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
-      child.stdout.pipe(logStream);
-      child.stderr.pipe(logStream);
+      this.currentProcess.stdout?.pipe(logStream);
+      this.currentProcess.stderr?.pipe(logStream);
 
-      // Wait a moment to check if process started successfully
       await new Promise(resolve => setTimeout(resolve, 1000));
       const newStatus = await this.getStatus();
 
@@ -91,12 +158,14 @@ export class DnsmasqService {
           pid: newStatus.pid
         };
       } else {
+        this.currentProcess = null;
         return { 
           success: false, 
           message: 'DNSMasq failed to start - process not found after launch'
         };
       }
     } catch (error) {
+      this.currentProcess = null;
       this.logger.error('Error starting dnsmasq:', error);
       return { success: false, message: `Failed to start dnsmasq: ${error.message}` };
     }
@@ -110,10 +179,12 @@ export class DnsmasqService {
         return { success: false, message: 'DNSMasq is not running' };
       }
 
-      // Kill the process
-      await execAsync(`kill ${status.pid}`);
-      
-      // Wait a moment and check if process is really stopped
+      if (this.currentProcess) {
+        this.currentProcess.kill();
+      } else if (status.pid) {
+        process.kill(status.pid);
+      }
+
       await new Promise(resolve => setTimeout(resolve, 1000));
       const newStatus = await this.getStatus();
       
@@ -121,8 +192,13 @@ export class DnsmasqService {
         this.logger.log(`DNSMasq stopped (PID: ${status.pid})`);
         return { success: true, message: 'DNSMasq stopped successfully' };
       } else {
-        // Try force kill if normal kill failed
-        await execAsync(`kill -9 ${status.pid}`);
+        // 强制终止
+        if (this.currentProcess) {
+          this.currentProcess.kill('SIGKILL');
+        } else if (status.pid) {
+          process.kill(status.pid, 'SIGKILL');
+        }
+        this.currentProcess = null;
         return { success: true, message: 'DNSMasq force stopped' };
       }
     } catch (error) {
@@ -133,16 +209,12 @@ export class DnsmasqService {
 
   async restart(): Promise<{ success: boolean; message: string; pid?: number }> {
     try {
-      // Stop first
       const stopResult = await this.stop();
       if (!stopResult.success && stopResult.message !== 'DNSMasq is not running') {
         return { success: false, message: `Failed to stop dnsmasq: ${stopResult.message}` };
       }
 
-      // Wait a moment
       await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Start again
       return await this.start();
     } catch (error) {
       this.logger.error('Error restarting dnsmasq:', error);
@@ -160,33 +232,5 @@ export class DnsmasqService {
       this.logger.error('Error reading logs:', error);
       return 'Error reading logs';
     }
-  }
-
-  /**
-   * Parse elapsed time string from ps command (format: [[dd-]hh:]mm:ss)
-   * @param elapsed elapsed time string
-   * @returns milliseconds
-   */
-  private parseElapsedTime(elapsed: string): number {
-    const parts = elapsed.split(/[-:]/).map(Number);
-    let milliseconds = 0;
-    
-    if (parts.length === 4) { // dd-hh:mm:ss
-      milliseconds += parts[0] * 24 * 60 * 60 * 1000; // days
-      milliseconds += parts[1] * 60 * 60 * 1000; // hours
-      milliseconds += parts[2] * 60 * 1000; // minutes
-      milliseconds += parts[3] * 1000; // seconds
-    } else if (parts.length === 3) { // hh:mm:ss
-      milliseconds += parts[0] * 60 * 60 * 1000; // hours
-      milliseconds += parts[1] * 60 * 1000; // minutes
-      milliseconds += parts[2] * 1000; // seconds
-    } else if (parts.length === 2) { // mm:ss
-      milliseconds += parts[0] * 60 * 1000; // minutes
-      milliseconds += parts[1] * 1000; // seconds
-    } else {
-      milliseconds += parts[0] * 1000; // seconds
-    }
-    
-    return milliseconds;
   }
 }
