@@ -2,20 +2,30 @@ version: '3.8'
 
 services:
   dnsmasq-manager:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: dnsmasq-manager
     ports:
       - "3000:3000"
+      - "53:53/tcp"
+      - "53:53/udp"
     environment:
-      - DNSMASQ_HOSTS=/app/data/extra_hosts.conf
-      - NODE_ENV=production
+      DNSMASQ_HOSTS: /app/data/extra_hosts.conf
+      NODE_ENV: production
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - ./data:/app/data:rw
+      - ./logs:/app/logs:rw
     restart: unless-stopped
-    privileged: true  # Required for dnsmasq to bind to port 53
+    privileged: true # Required for dnsmasq to bind to port 53
     networks:
       - dnsmasq-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/dnsmasq/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 
 networks:
   dnsmasq-network:
