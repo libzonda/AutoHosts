@@ -1,3 +1,5 @@
+# Ignore runtime hosts file
+extra_hosts.conf
 # Dependencies
 node_modules/
 npm-debug.log*
