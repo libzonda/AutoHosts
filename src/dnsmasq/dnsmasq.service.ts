@@ -30,9 +30,12 @@ export class DnsmasqService {
       const processInfo = stdout.trim().split('\n')[0].split(/\s+/);
       const pid = parseInt(processInfo[1]);
 
-      // Get process start time
-      const { stdout: timeInfo } = await execAsync(`ps -o lstart= -p ${pid}`);
-      const startTime = new Date(timeInfo.trim());
+      // Get process elapsed time
+      const { stdout: timeInfo } = await execAsync(`ps -o etime= -p ${pid}`);
+      const elapsedTime = timeInfo.trim();
+      const now = new Date();
+      // Calculate start time by subtracting elapsed time from now
+      const startTime = new Date(now.getTime() - this.parseElapsedTime(elapsedTime));
 
       // Check if DNS port is bound
       const { stdout: portInfo } = await execAsync('netstat -lnp | grep dnsmasq');
@@ -155,5 +158,33 @@ export class DnsmasqService {
       this.logger.error('Error reading logs:', error);
       return 'Error reading logs';
     }
+  }
+
+  /**
+   * Parse elapsed time string from ps command (format: [[dd-]hh:]mm:ss)
+   * @param elapsed elapsed time string
+   * @returns milliseconds
+   */
+  private parseElapsedTime(elapsed: string): number {
+    const parts = elapsed.split(/[-:]/).map(Number);
+    let milliseconds = 0;
+    
+    if (parts.length === 4) { // dd-hh:mm:ss
+      milliseconds += parts[0] * 24 * 60 * 60 * 1000; // days
+      milliseconds += parts[1] * 60 * 60 * 1000; // hours
+      milliseconds += parts[2] * 60 * 1000; // minutes
+      milliseconds += parts[3] * 1000; // seconds
+    } else if (parts.length === 3) { // hh:mm:ss
+      milliseconds += parts[0] * 60 * 60 * 1000; // hours
+      milliseconds += parts[1] * 60 * 1000; // minutes
+      milliseconds += parts[2] * 1000; // seconds
+    } else if (parts.length === 2) { // mm:ss
+      milliseconds += parts[0] * 60 * 1000; // minutes
+      milliseconds += parts[1] * 1000; // seconds
+    } else {
+      milliseconds += parts[0] * 1000; // seconds
+    }
+    
+    return milliseconds;
   }
 }
