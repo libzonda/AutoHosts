@@ -2,6 +2,8 @@
 
 AutoHosts is a modern, powerful NestJS-based web application for automatic DNS hosts management. It fetches hosts files from multiple sources, manages them with DNSMasq, and provides a beautiful web UI for control and monitoring.
 
+![AutoHosts Screenshot](images/screentshot.png)
+
 ## 🚀 Features
 
 - **DNSMasq Service Management**: Start, stop, restart, and monitor DNSMasq with one click
