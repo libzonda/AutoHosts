@@ -44,9 +44,16 @@ COPY extra_hosts.conf.example /app/data/extra_hosts.conf
 COPY urls.example.json /app/data/urls.json
 
 
+
+# Copy entrypoint script and set permissions
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create necessary files with correct permissions
-RUN touch /app/data/dnsmasq.pid /app/logs/dnsmasq.log /app/data/urls.json && \
+RUN touch /app/logs/dnsmasq.log /app/data/urls.json && \
     chown -R appuser:appgroup /app/data /app/logs
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Add metadata labels
 LABEL maintainer="libzonda" \
