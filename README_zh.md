@@ -15,16 +15,57 @@ AutoHosts 是一个现代化、强大的基于 NestJS 的自动 DNS hosts 管理
 
 ### 推荐：Docker 部署
 
+#### 方式一：Docker Hub
+
 ```bash
-git clone https://github.com/libzonda/AutoHosts.git
-cd AutoHosts
-cp config.example.json config.json
-cp urls.example.json urls.json
-# 按需编辑 config.json 和 urls.json
-docker-compose up -d
+# 从 Docker Hub 拉取镜像
+docker pull libzonda/autohosts:latest
+
+# 使用最小配置运行
+docker run -d \
+  --name autohosts \
+  -p 3000:3000 \
+  -p 53:53/tcp \
+  -p 53:53/udp \
+  --privileged \
+  libzonda/autohosts:latest
 ```
 
-访问：[http://localhost:3000](http://localhost:3000)
+#### 方式二：GitHub Packages
+
+```bash
+# 从 GitHub Packages 拉取镜像
+docker pull ghcr.io/libzonda/autohosts:latest
+
+# 使用最小配置运行
+docker run -d \
+  --name autohosts \
+  -p 3000:3000 \
+  -p 53:53/tcp \
+  -p 53:53/udp \
+  --privileged \
+  ghcr.io/libzonda/autohosts:latest
+```
+
+#### 方式三：Docker Compose（推荐用于自定义配置）
+
+```bash
+# 下载 docker-compose.yml
+wget https://raw.githubusercontent.com/libzonda/AutoHosts/main/docker-compose.yml
+
+# 创建数据和日志目录
+mkdir -p data logs
+
+# 启动服务
+docker compose up -d
+```
+
+访问 Web 界面：[http://localhost:3000](http://localhost:3000)
+
+自定义配置：
+- 挂载 `/app/data` 目录以持久化 hosts 和配置文件
+- 挂载 `/app/logs` 目录以持久化日志
+- 通过环境变量进行配置（参见配置说明章节）
 
 ### 手动部署
 

@@ -15,16 +15,57 @@ AutoHosts is a modern, powerful NestJS-based web application for automatic DNS h
 
 ### Docker (Recommended)
 
+#### Option 1: Docker Hub
+
 ```bash
-git clone https://github.com/libzonda/AutoHosts.git
-cd AutoHosts
-cp config.example.json config.json
-cp urls.example.json urls.json
-# Edit config.json and urls.json as needed
-docker-compose up -d
+# Pull from Docker Hub
+docker pull libzonda/autohosts:latest
+
+# Run with minimal configuration
+docker run -d \
+  --name autohosts \
+  -p 3000:3000 \
+  -p 53:53/tcp \
+  -p 53:53/udp \
+  --privileged \
+  libzonda/autohosts:latest
 ```
 
-Access: [http://localhost:3000](http://localhost:3000)
+#### Option 2: GitHub Packages
+
+```bash
+# Pull from GitHub Packages
+docker pull ghcr.io/libzonda/autohosts:latest
+
+# Run with minimal configuration
+docker run -d \
+  --name autohosts \
+  -p 3000:3000 \
+  -p 53:53/tcp \
+  -p 53:53/udp \
+  --privileged \
+  ghcr.io/libzonda/autohosts:latest
+```
+
+#### Option 3: Docker Compose (recommended for customization)
+
+```bash
+# Download docker-compose.yml
+wget https://raw.githubusercontent.com/libzonda/AutoHosts/main/docker-compose.yml
+
+# Create data and logs directories
+mkdir -p data logs
+
+# Start the service
+docker compose up -d
+```
+
+Access the Web UI: [http://localhost:3000](http://localhost:3000)
+
+Customization:
+- Mount volume `/app/data` to persist hosts and config files
+- Mount volume `/app/logs` to persist logs
+- Configure through environment variables (see Configuration section)
 
 ### Manual
 
@@ -81,13 +122,15 @@ src/
 - `GET /api/hosts/content|stats` — Hosts file info
 - `POST /api/hosts/fetch` — Manual fetch
 
-## 🐳 Docker Deployment
+## 🐳 Docker Tags
 
-```bash
-docker build -t autohosts .
-docker run -d -p 3000:3000 --privileged autohosts
-```
-Or use `docker-compose up -d`.
+- `latest` - Latest stable release
+- `edge` - Latest development build
+- `X.Y.Z` - Specific version release
+
+Available on both:
+- Docker Hub: `docker pull libzonda/autohosts:latest`
+- GitHub Packages: `docker pull ghcr.io/libzonda/autohosts:latest`
 
 ## 🛠️ Development
 
