@@ -30,7 +30,7 @@ export class DnsmasqService {
             isRunning: true,
             pid,
             startTime: stats.birthtime,
-            command: 'dnsmasq --no-daemon'
+            command: 'dnsmasq'
           };
         } else {
           // Clean up stale PID file
@@ -55,7 +55,7 @@ export class DnsmasqService {
 
       // Start dnsmasq process with additional hosts file
       const hostsFile = process.env.DNSMASQ_HOSTS || '/app/data/extra_hosts.conf';
-      const child = spawn('dnsmasq', ['--no-daemon', `--addn-hosts=${hostsFile}`], {
+      const child = spawn('dnsmasq', [`--addn-hosts=${hostsFile}`], {
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe']
       });
