@@ -51,7 +51,7 @@ RUN touch /app/data/dnsmasq.pid /app/logs/dnsmasq.log /app/data/urls.json && \
 # Add metadata labels
 LABEL maintainer="libzonda" \
       version="1.0" \
-      description="DNSMasq Manager - A NestJS-based web application for managing DNSMasq service and hosts"
+      description="AutoHosts - A NestJS-based web application for managing DNSMasq service and hosts"
 
 # Set environment variables
 ENV DNSMASQ_HOSTS=/app/data/extra_hosts.conf \

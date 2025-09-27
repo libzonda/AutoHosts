@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "DNSMasq Manager - Test Script"
+echo "AutoHosts - Test Script"
 echo "============================="
 
 # Check if Node.js is installed

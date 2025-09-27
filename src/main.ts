@@ -30,7 +30,7 @@ async function bootstrap() {
     } else {
       fs.writeFileSync(configFile, JSON.stringify({
         hostsFetchCron: "*/5 * * * *",
-        hostsFilePath: "D:\\PRJ\\AutoHosts\\extra_hosts.conf",
+        hostsFilePath: "/app/data/extra_hosts.conf",
         hostsFetchTimeout: 20000
       }, null, 2));
     }
@@ -48,6 +48,6 @@ async function bootstrap() {
   app.enableCors();
 
   await app.listen(3000);
-  console.log('DNSMasq Manager is running on http://localhost:3000');
+  console.log('AutoHosts is running on http://localhost:3000');
 }
 bootstrap();

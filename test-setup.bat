@@ -1,5 +1,5 @@
 @echo off
-echo DNSMasq Manager - Test Script
+echo AutoHosts - Test Script
 echo =============================
 
 REM Check if Node.js is installed
